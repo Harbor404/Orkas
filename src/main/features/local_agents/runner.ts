@@ -737,6 +737,9 @@ export interface LocalAgentRunLogDiagnostics {
   doneEventMs?: number;
   terminalStatus?: string;
   terminalError: boolean;
+  exitCode?: number | null;
+  protocolRecordCount?: number;
+  protocolErrorSeen?: boolean;
   usage?: Record<string, number>;
   toolTimeline: LocalToolTimelineLogEntry[];
   toolTimelineTruncated: number;
@@ -978,6 +981,14 @@ export function recordLocalAgentEventForLog(stats: LocalAgentRunLogDiagnostics, 
       noteElapsedOnce(stats, 'doneEventMs', nowMs);
       stats.terminalStatus = typeof e.status === 'string' ? e.status : stats.terminalStatus;
       stats.terminalError = !!e.error;
+      if (e.exitCode === null) stats.exitCode = null;
+      else if (typeof e.exitCode === 'number' && Number.isSafeInteger(e.exitCode)
+          && e.exitCode >= 0 && e.exitCode <= 65535) stats.exitCode = e.exitCode;
+      if (typeof e.protocolRecordCount === 'number' && Number.isSafeInteger(e.protocolRecordCount)
+          && e.protocolRecordCount >= 0 && e.protocolRecordCount <= 1_000_000) {
+        stats.protocolRecordCount = e.protocolRecordCount;
+      }
+      if (typeof e.protocolErrorSeen === 'boolean') stats.protocolErrorSeen = e.protocolErrorSeen;
       stats.usage = safeUsageForLog(e.usage) || stats.usage;
       noteLocalEventTimelineForLog(stats, 'done', nowMs, `status=${String(e.status || '')} error=${e.error ? 'true' : 'false'}`);
       break;
@@ -1020,6 +1031,9 @@ export function summarizeLocalAgentRunForLog(stats: LocalAgentRunLogDiagnostics,
     doneEventMs: stats.doneEventMs,
     terminalStatus: stats.terminalStatus,
     terminalError: stats.terminalError,
+    ...(stats.exitCode !== undefined ? { exitCode: stats.exitCode } : {}),
+    ...(stats.protocolRecordCount !== undefined ? { protocolRecordCount: stats.protocolRecordCount } : {}),
+    ...(stats.protocolErrorSeen !== undefined ? { protocolErrorSeen: stats.protocolErrorSeen } : {}),
     usage: stats.usage,
   };
 }

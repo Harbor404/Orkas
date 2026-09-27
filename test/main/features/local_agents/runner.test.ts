@@ -285,7 +285,7 @@ describe('local_agents/runner', () => {
       paths: ['/Users/test/private.txt', '/Users/test/other.txt'],
     }, 1170);
     runner.recordLocalAgentEventForLog(stats, { type: 'status', status: 'usage', usage: { input: 5, output: 7, secretText: 'nope' } }, 1180);
-    runner.recordLocalAgentEventForLog(stats, { type: 'done', status: 'completed', output: 'private final', usage: { input: 5, output: 8 } }, 1200);
+    runner.recordLocalAgentEventForLog(stats, { type: 'done', status: 'completed', output: 'private final', usage: { input: 5, output: 8 }, exitCode: 0, protocolRecordCount: 2, protocolErrorSeen: false }, 1200);
 
     const summary = runner.summarizeLocalAgentRunForLog(stats, 1300);
     expect(summary.eventCount).toBe(13);
@@ -298,6 +298,7 @@ describe('local_agents/runner', () => {
     expect(summary.fileChangePathCount).toBe(2);
     expect(summary.permissionAutoDeny).toBe(1);
     expect(summary.usage).toMatchObject({ input: 5, output: 8 });
+    expect(summary).toMatchObject({ exitCode: 0, protocolRecordCount: 2, protocolErrorSeen: false });
     expect(summary.toolTimeline).toEqual([
       '#1 +140ms bash use call=loca...3456',
       `#2 +150ms bash result call=loca...3456 error=true output_chars=${'private tool output'.length} spilled=true`,

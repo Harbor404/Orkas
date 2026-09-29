@@ -1360,7 +1360,16 @@ export async function run(opts: RunCliAgentOpts): Promise<RunCliAgentResult> {
   let remoteMediaScheduledCount = 0;
   let remoteMediaReservedBytes = 0;
   let remoteMediaDeadlineAt = 0;
-  const activityClock = new AgentActivityClock();
+  let idleNow = () => Date.now();
+  try {
+    const { getSystemActivityClock } = await import('../system_activity');
+    idleNow = await getSystemActivityClock();
+  } catch {
+    // Preserve existing timeout behavior when the OS event source is absent;
+    // a quiet CLI or a clock jump is never evidence of system suspension.
+    log.warn('CLI system suspension clock unavailable; retaining wall-clock idle timeout');
+  }
+  const activityClock = new AgentActivityClock(idleNow);
   let lastVisibleActivityAt = Date.now();
   const bridgeSkillRefByCallId = new Map<string, string>();
   let bridge: BridgeHandle | null = null;

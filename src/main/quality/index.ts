@@ -83,6 +83,11 @@ export function validateSkillFile(args: {
     violations.push(..._scanSkillMd(args.content, args.relpath, {}, true, false, args.operatorRules));
   } else if (kind === 'skill_meta') {
     violations.push(..._scanSkillMeta(args.content));
+    violations.push(..._policyScan(args.operatorRules, {
+      content: args.content,
+      kind: 'skill_meta',
+      field: args.relpath,
+    }));
   } else if (kind === 'script') {
     const scanArgs: RuleScanArgs = {
       content: args.content,
@@ -146,16 +151,16 @@ export function validateSkillDir(
     return _finalize(violations);
   }
 
-  // Walk all other recognized files (scripts).
+  // Walk all other recognized files (scripts and _meta.json policy targets).
   for (const rel of _walkFiles(skillDir, '')) {
     if (rel.toUpperCase() === 'SKILL.MD') continue;
-    if (rel === '_meta.json') continue;
     const kind = detectSkillFileKind(rel);
-    if (kind !== 'script') continue;
+    if (kind !== 'script' && kind !== 'skill_meta') continue;
+    if (kind === 'skill_meta' && !options.operatorRules?.length) continue;
     try {
       const content = fs.readFileSync(path.join(skillDir, rel), 'utf8');
-      const scanArgs: RuleScanArgs = { content, kind: 'script', field: rel };
-      violations.push(...scanRedFlags(scanArgs));
+      const scanArgs: RuleScanArgs = { content, kind, field: rel };
+      if (kind === 'script') violations.push(...scanRedFlags(scanArgs));
       violations.push(..._policyScan(options.operatorRules, scanArgs));
     } catch {
       // unreadable file (binary / permission) — skip; no violation surfaced
@@ -250,7 +255,8 @@ function _policyScan(
   rules: ReadonlyArray<RuleDef> | undefined,
   args: RuleScanArgs,
 ): Violation[] {
-  return scanRuleSet(rules ?? [], args, 'operator-policy');
+  if (!rules?.length) return [];
+  return scanRuleSet(rules, args, 'operator-policy');
 }
 
 function detectSkillFileKind(relpath: string): ScanKind {
@@ -301,7 +307,7 @@ function _scanSkillMd(
       field: `${field}:${block.startLine} (\`\`\`${block.lang})`,
     };
     violations.push(...scanRedFlags(scanArgs));
-    violations.push(..._policyScan(operatorRules, scanArgs));
+    violations.push(..._policyScan(operatorRules, { ...scanArgs, kind: 'skill_md' }));
   }
 
   return violations;

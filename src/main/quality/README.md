@@ -52,7 +52,10 @@ rules as `operatorRules` to `validateSkillFile` / `validateSkillDir` /
 The built-in rules stay the security floor: operator rules are additive only
 — they never suppress, downgrade or rewrite a built-in finding, and a
 colliding id is rejected. Their findings carry `source: 'operator-policy'`.
-Still not a sandbox. Field reference lives in `rules/operator-policy.ts`.
+`appliesTo` scopes operator rules by artifact: `skill_md` means executable
+fenced blocks in `SKILL.md`, `script` means standalone script files,
+`skill_meta` means `_meta.json`, and `agent_json` means an Agent spec. Still
+not a sandbox. Field reference lives in `rules/operator-policy.ts`.
 
 ## Levels
 

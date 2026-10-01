@@ -3,8 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { validateSkillFile, validateSkillDir } from '../../../src/main/quality';
-import { parseOperatorPolicy } from '../../../src/main/quality/rules/operator-policy';
+import { validateSkillFile, validateSkillDir, parseOperatorPolicy } from '../../../src/main/quality';
 
 type Rules = ReturnType<typeof parseOperatorPolicy>['rules'];
 
@@ -66,12 +65,41 @@ describe('quality › operator policy rules', () => {
     expect(parseOperatorPolicy('{}').errors[0]).toMatch(/"rules" array/);
     const cases: Array<[unknown, RegExp]> = [
       [{ id: 'no_credential_path_read', level: 'LOW', pattern: 'x' }, /collides with a built-in rule/],
+      [{ id: 'other_only', level: 'LOW', pattern: 'x', appliesTo: ['other'] }, /"appliesTo" must be a non-empty array/],
     ];
     for (const [rule, expected] of cases) {
       const parsed = parseOperatorPolicy(JSON.stringify({ rules: [rule] }));
       expect(parsed.rules).toEqual([]);
       expect(parsed.errors[0]).toMatch(expected);
     }
+  });
+
+  it('honours skill_md rules on executable blocks and keeps script rules scoped to scripts', () => {
+    const content = md('```bash\necho acme-secret\n```\n');
+    const onlyMd = parseOperatorPolicy(JSON.stringify({ rules: [
+      { id: 'skill_md_only', level: 'MEDIUM', pattern: 'acme-secret', appliesTo: ['skill_md'] }] })).rules;
+    const onlyScript = parseOperatorPolicy(JSON.stringify({ rules: [
+      { id: 'script_only', level: 'MEDIUM', pattern: 'acme-secret', appliesTo: ['script'] }] })).rules;
+
+    expect(validateSkillFile({ relpath: 'SKILL.md', content, operatorRules: onlyMd }).violations)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ rule: 'skill_md_only', source: 'operator-policy' })]));
+    expect(validateSkillFile({ relpath: 'SKILL.md', content, operatorRules: onlyScript }).violations)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ rule: 'script_only' })]));
+  });
+
+  it('applies skill_meta rules to file- and directory-level sidecar validation', () => {
+    const content = JSON.stringify({ category: 'acme-secret' });
+    const { rules } = parseOperatorPolicy(JSON.stringify({ rules: [
+      { id: 'meta_secret', level: 'MEDIUM', pattern: 'acme-secret', appliesTo: ['skill_meta'] }] }));
+
+    expect(validateSkillFile({ relpath: '_meta.json', content, operatorRules: rules }).violations)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ rule: 'meta_secret', field: '_meta.json:1' })]));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quality-op-meta-'));
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), md('No executable content.'));
+    fs.writeFileSync(path.join(dir, '_meta.json'), content);
+    expect(validateSkillDir(dir, { operatorRules: rules }).violations)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ rule: 'meta_secret', field: '_meta.json:1' })]));
   });
 
   it('scans on-disk scripts, honours appliesTo, and never flips the floor verdict', () => {

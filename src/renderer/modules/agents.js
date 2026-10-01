@@ -4233,7 +4233,9 @@ function _renderLibraryPickerList(listEl, filterText, anchorId) {
       const picker = document.getElementById('agent-picker');
       if (!picker || picker.style.display === 'none' || _agentPickerTab !== 'library') return;
       const search = document.getElementById('agent-picker-search');
-      _renderLibraryPickerList(listEl, search ? search.value : filterText, anchorId);
+      // Use the shared repaint boundary so placement measures the loaded rows,
+      // not the shorter loading shell that was visible before this response.
+      _renderAgentPickerList(search ? search.value : filterText);
     });
     return;
   }
